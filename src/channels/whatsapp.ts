@@ -39,6 +39,8 @@ export class WhatsAppChannel implements Channel {
   private groupSyncTimerStarted = false;
 
   private opts: WhatsAppChannelOpts;
+  private reconnectAttempts = 0;
+  private static readonly MAX_RECONNECT_ATTEMPTS = 10;
 
   constructor(opts: WhatsAppChannelOpts) {
     this.opts = opts;
@@ -91,7 +93,12 @@ export class WhatsAppChannel implements Channel {
         logger.info({ reason, shouldReconnect, queuedMessages: this.outgoingQueue.length }, 'Connection closed');
 
         if (shouldReconnect) {
-          logger.info('Reconnecting...');
+          this.reconnectAttempts++;
+          if (this.reconnectAttempts >= WhatsAppChannel.MAX_RECONNECT_ATTEMPTS) {
+            logger.error({ attempts: this.reconnectAttempts, reason }, 'Too many consecutive reconnect failures, exiting for launchctl restart');
+            process.exit(1);
+          }
+          logger.info({ attempt: this.reconnectAttempts }, 'Reconnecting...');
           this.connectInternal().catch((err) => {
             logger.error({ err }, 'Failed to reconnect, retrying in 5s');
             setTimeout(() => {
@@ -106,6 +113,7 @@ export class WhatsAppChannel implements Channel {
         }
       } else if (connection === 'open') {
         this.connected = true;
+        this.reconnectAttempts = 0;
         logger.info('Connected to WhatsApp');
 
         // Announce availability so WhatsApp relays subsequent presence updates (typing indicators)
