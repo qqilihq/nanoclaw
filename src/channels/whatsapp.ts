@@ -98,15 +98,13 @@ export class WhatsAppChannel implements Channel {
             logger.error({ attempts: this.reconnectAttempts, reason }, 'Too many consecutive reconnect failures, exiting for launchctl restart');
             process.exit(1);
           }
-          logger.info({ attempt: this.reconnectAttempts }, 'Reconnecting...');
-          this.connectInternal().catch((err) => {
-            logger.error({ err }, 'Failed to reconnect, retrying in 5s');
-            setTimeout(() => {
-              this.connectInternal().catch((err2) => {
-                logger.error({ err: err2 }, 'Reconnection retry failed');
-              });
-            }, 5000);
-          });
+          const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 60_000);
+          logger.info({ attempt: this.reconnectAttempts, delayMs: delay }, 'Reconnecting...');
+          setTimeout(() => {
+            this.connectInternal().catch((err) => {
+              logger.error({ err }, 'Reconnect attempt failed');
+            });
+          }, delay);
         } else {
           logger.info('Logged out. Run /setup to re-authenticate.');
           process.exit(0);
